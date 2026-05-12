@@ -23,11 +23,12 @@
 | 03 | [硬件设计](docs/03-hardware-design.md) | BOM、原理图模块、PCB 叠层、电源树 |
 | 04 | [固件架构](docs/04-firmware-architecture.md) | Task 划分、内存预算、状态机、AT 驱动 |
 | 05 | [后端与 APP 架构](docs/05-cloud-and-app.md) | API、MQTT topic、数据模型、APP 信息架构 |
+| 06 | [项目执行清单（P0–P5）](docs/06-project-checklist.md) | 分阶段 step-by-step，`- [ ]` 打勾跟踪进度 |
 
 ## 关键技术决策（速览）
 
 - 主控：ESP32-S3-WROOM-1U-N16R8
-- 4G + GNSS：移远 EC800N-CN LD（Cat.1 + VoLTE + GPS/BDS/GLO/GAL）
+- 4G + GNSS：移远 EC800 系列（Cat.1 数据 + GNSS；**V1 语音走 APP**，VoLTE pstn 不强制，见 `docs/00-vision.md` §4.0）
 - 屏幕：1.43" 圆形 AMOLED 466×466 SH8601 + FT3168 触摸（QSPI）
 - SIM：Nano SIM 卡座 + 消费级运营商儿童副卡
 - 后端：Ubuntu 22.04 单机 Docker Compose（裸 IP + 自签证书 + 高位端口）

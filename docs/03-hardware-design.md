@@ -2,7 +2,7 @@
 
 > 文档编号：HW
 > 适用版本：V1
-> 状态：设计阶段（P0 原型用 Waveshare 开发板 + EC800N 评估板验证，自研 PCB 在 P4 阶段交付）
+> 状态：设计阶段（P0 原型用 Waveshare 开发板 + **EC800 系列**蜂窝板验证；V1 语音以 **数据链路 + APP** 为主，见 [00-愿景 §4.0](00-vision.md)。自研 PCB 在 P4 阶段交付）
 
 ---
 
@@ -94,7 +94,7 @@ flowchart TB
 | 类别 | 型号 | 数量 | 单价 | 小计 | 关键参数 |
 |---|---|---|---|---|---|
 | MCU | ESP32-S3-WROOM-1U-N16R8 | 1 | 28 | 28 | 16MB Flash + 8MB PSRAM, 外置天线版 |
-| 4G+GNSS | 移远 EC800N-CN LD | 1 | 55 | 55 | Cat.1 + VoLTE + GPS/BDS/GLO/GAL |
+| 4G+GNSS | 移远 **EC800 系列**（如 EC800N/K/M-CN，**含 GNSS 的订货号**） | 1 | ~50–60 | ~55 | Cat.1 **数据** + GNSS；VoLTE pstn **不强制**（V1 方案 B） |
 | 显示模组 | 1.43" AMOLED 466×466 + SH8601 + FT3168 | 1 | 90 | 90 | QSPI + I2C 触摸 |
 | IMU | QMI8658C | 1 | 8 | 8 | 6 轴 加速度+陀螺，I2C |
 | MEMS 麦克风 | SPH0645LM4H | 1 | 7 | 7 | I2S 24-bit |
