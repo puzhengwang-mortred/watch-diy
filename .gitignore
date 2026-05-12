@@ -1,0 +1,56 @@
+# ===== Secrets / Certs =====
+ca.key
+*.pem.key
+secrets/
+.env
+.env.*
+!.env.example
+
+# ===== ESP-IDF / Firmware =====
+firmware/build/
+firmware/sdkconfig.old
+firmware/dependencies.lock
+firmware/managed_components/
+*.bin
+*.elf
+*.map
+
+# ===== Go server =====
+server/bin/
+server/vendor/
+server/coverage.out
+server/*.log
+
+# ===== Flutter app =====
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/ios/Pods/
+app/ios/Flutter/Flutter.podspec
+app/ios/Flutter/Generated.xcconfig
+app/ios/Runner/GeneratedPluginRegistrant.*
+app/android/.gradle/
+app/android/captures/
+app/android/local.properties
+app/android/key.properties
+
+# ===== Hardware / EDA =====
+hardware/**/fp-info-cache
+hardware/**/*-backups/
+hardware/**/_autosave-*
+hardware/**/gerber/
+hardware/**/bom/output/
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ===== Logs / Cache =====
+*.log
+logs/
+.cache/
