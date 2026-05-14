@@ -6,6 +6,7 @@ idf_component_register(
         "ui/ui_demo.c"
         "services/svc_system.c"
         "services/svc_rtc.c"
+        "services/svc_batt.c"
         "services/svc_timesync_wifi.c"
     INCLUDE_DIRS
         "."
@@ -14,7 +15,7 @@ idf_component_register(
         "ui"
         "services"
     REQUIRES esp_lcd_sh8601 nvs_flash driver esp_system esp_app_format espressif__esp_lvgl_port
-        esp_netif esp_wifi esp_event
+        esp_netif esp_wifi esp_event esp_adc
 )
 
 # UTF-8 string literals in ui_demo.c (Chinese); avoids mojibake on Windows toolchains.

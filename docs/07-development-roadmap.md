@@ -52,6 +52,7 @@
 - **1.1（已完成，2026-05-12）**：`ui_demo.c` 使用 **`lv_obj_create(NULL)`** 建立 **表盘、设置（`lv_list`）、关于** 三屏；**`lv_scr_load`** 切换并 **`lv_obj_del`** 默认首屏；`esp_app_get_description()` 显示固件版本与 IDF 串；表盘时间为占位（**1.2 RTC**）。Kconfig 启用 **SimSun 16 CJK** 为默认字体、**Montserrat 48** 仅用于大号时间。粗测防泄漏：切换路径不 `new` 新 screen，仅重复 `load`。
 - **1.2（已完成，2026-05-14）**：**`svc_rtc.*`** 经共享 **I2C0** 读 **PCF85063A（7-bit `0x51`）**；上电清除 **CTRL1.STOP**；**`lv_timer`** 每秒刷新表盘 **HH:MM** 与 **YYYY-MM-DD**。**时区**：当前将芯片寄存器视为 **东八区墙钟**（无夏令时；与 1.3 SNTP 写入策略衔接时再细化 UTC/本地）。无应答或 **OS** 位时表盘降级为 **`--:--`** 与状态文案。
 - **1.3（已完成，2026-05-14）**：**`svc_timesync_wifi.*`**：`esp_netif` + **STA**；**`pool.ntp.org`** SNTP；**`TZ=CST-8`** 后 **`localtime_r`** 得到墙钟并 **`svc_rtc_write_local`** 写回 PCF85063；写 RTC 前 **`lvgl_port_lock`** 避免与触摸共用 I2C 交错。凭据在 **menuconfig → Watch WiFi / SNTP**；**SSID 为空则跳过**联网。成功/失败均有 **`svc_ts` / `svc_rtc` 日志**。
+- **1.4（已完成，2026-05-14）**：**`svc_batt.*`**：**GPIO4 / ADC1 CH3**（微雪 **BAT_ADC**），分压与空满电压在 **`bsp_board.h`** 可调；线性 **0–100%** + **EMA**；表盘 **右上** 百分比，**低于 20%** 红色（对齐 **02** 低电量提示）。圆形表盘布局约定写入 **`.cursor/rules/watch-diy-round-watchface-lvgl.mdc`**（`firmware/main/ui`）。**BQ27220** 等燃料计后续可替换读数路径。
 
 ---
 

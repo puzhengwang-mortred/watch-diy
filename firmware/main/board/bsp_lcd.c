@@ -2,6 +2,7 @@
 #include "bsp_board.h"
 
 #include "esp_check.h"
+#include "esp_heap_caps.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_log.h"
@@ -18,7 +19,50 @@
 
 static const char *TAG = "bsp_lcd";
 
-/* 466x466: CASET/RASET end 0x1D1. Init seq from waveshare esp_lcd_sh8601 test, adapted for 1.43 panel. */
+/* Pre-clear the FULL panel (incl. the gap LVGL never touches between left & right margins).
+ * AMOLED GRAM is random on power-up — on SH8601 it often surfaces as a bright green
+ * vertical stripe near the right bezel until something overwrites those pixels. A single
+ * giant DMA buffer (~430 KB) won't fit in internal SRAM, so chunk by rows and reuse one
+ * pre-filled buffer; the SPI queue serialises tx, so reusing the same constant-content
+ * buffer is safe even before DMA drains. */
+static esp_err_t bsp_lcd_fill_panel_bg(esp_lcd_panel_handle_t panel, uint16_t rgb565)
+{
+    const int chunk_rows = 32;
+    const size_t chunk_pixels = (size_t)BSP_LCD_H_RES * (size_t)chunk_rows;
+    const size_t chunk_bytes = chunk_pixels * sizeof(uint16_t);
+    uint16_t *buf = (uint16_t *)heap_caps_malloc(chunk_bytes, MALLOC_CAP_DMA);
+    if (buf == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    for (size_t i = 0; i < chunk_pixels; i++) {
+        buf[i] = rgb565;
+    }
+
+    esp_err_t err = ESP_OK;
+    for (int y = 0; y < BSP_LCD_V_RES; y += chunk_rows) {
+        int h = chunk_rows;
+        if (y + h > BSP_LCD_V_RES) {
+            h = BSP_LCD_V_RES - y;
+        }
+        err = esp_lcd_panel_draw_bitmap(panel, 0, y, BSP_LCD_H_RES, y + h, buf);
+        if (err != ESP_OK) {
+            break;
+        }
+    }
+
+    /* esp_lcd panel io spi queues color tx — let DMA drain before freeing the source buf. */
+    vTaskDelay(pdMS_TO_TICKS(60));
+    heap_caps_free(buf);
+    return err;
+}
+
+/* Init seq for Waveshare 1.43 AMOLED (SH8601/CO5300 board variant).
+ * - 0xC4 0x80: SETMODESEL (CO5300 path tolerates this on SH8601 too).
+ * - 0x44 0x01,0xD1: TE scanline = 465 (still inside visible 466).
+ * - 0x2A/0x2B: CASET/RASET span 0..487 = 488 cols. The visible 466 cols sit at panel
+ *   cols 6..471 on CO5300 (LovyanGFX/CO5300_ID + 0x06), so end address must exceed 471.
+ *   Each esp_lcd_panel_draw_bitmap re-sets CASET, so this is the "max addressable"
+ *   floor, not the per-flush range. */
 static const sh8601_lcd_init_cmd_t s_lcd_init_cmds[] = {
     {0x11, (uint8_t[]){0x00}, 0, 120},
     {0xC4, (uint8_t[]){0x80}, 1, 0},
@@ -27,8 +71,8 @@ static const sh8601_lcd_init_cmd_t s_lcd_init_cmds[] = {
     {0x53, (uint8_t[]){0x20}, 1, 10},
     {0x63, (uint8_t[]){0xFF}, 1, 10},
     {0x51, (uint8_t[]){0x00}, 1, 10},
-    {0x2A, (uint8_t[]){0x00, 0x00, 0x01, 0xD1}, 4, 0},
-    {0x2B, (uint8_t[]){0x00, 0x00, 0x01, 0xD1}, 4, 0},
+    {0x2A, (uint8_t[]){0x00, 0x00, 0x01, 0xE7}, 4, 0},
+    {0x2B, (uint8_t[]){0x00, 0x00, 0x01, 0xE7}, 4, 0},
     {0x29, (uint8_t[]){0x00}, 0, 10},
     {0x51, (uint8_t[]){0xFF}, 1, 0},
 };
@@ -36,6 +80,22 @@ static const sh8601_lcd_init_cmd_t s_lcd_init_cmds[] = {
 static lv_disp_t *s_disp;
 static esp_lcd_panel_io_handle_t s_lcd_io;
 static lv_indev_drv_t s_touch_indev_drv;
+
+/* SH8601/CO5300 hard requirement (Waveshare README): every CASET/RASET endpoint must be
+ * even-aligned. We must round both axes — rounding x only used to mask the symptom but
+ * left y-glitches (italic-looking glyphs) on partial flushes. Also widen x to the full
+ * row so SPI DMA chunks stay row-aligned and never split mid-row. */
+static void bsp_lvgl_round_flush_width(lv_disp_drv_t *drv, lv_area_t *area)
+{
+    area->x1 = 0;
+    area->x2 = drv->hor_res - 1;
+    /* x1, x2 already even / (hor_res-1 odd) — start-even, end-odd → x_end_excl even. */
+    area->y1 &= ~1;                  /* round start down to even */
+    area->y2 = (area->y2 | 1);       /* round end up so y_end_excl = y2+1 is even */
+    if (area->y2 >= drv->ver_res) {
+        area->y2 = drv->ver_res - 1;
+    }
+}
 
 /* Short timeout: long stalls here block LVGL indev and lose quick taps. */
 #define TOUCH_I2C_TIMEOUT_MS 15
@@ -99,6 +159,9 @@ static esp_err_t touch_ft3168_read_status_xy(uint8_t *buf5)
 static lv_coord_t s_touch_last_x;
 static lv_coord_t s_touch_last_y;
 
+/* CO5300-style *custom* rounder that shrinks CASET was wrong for SH8601; here we only widen flushes
+ * to full panel width so SPI DMA chunks stay row-aligned (see bsp_lvgl_round_flush_width). */
+
 static void bsp_lv_touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
     (void)drv;
@@ -127,24 +190,19 @@ static void bsp_lv_touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
         y = BSP_LCD_V_RES - 1;
     }
 
-    s_touch_last_x = (lv_coord_t)x;
+    int tx = (int)x - BSP_LCD_VIEW_OFFSET_X;
+    if (tx < 0) {
+        tx = 0;
+    }
+    if (tx >= (int)BSP_LCD_LVGL_H_RES) {
+        tx = (int)BSP_LCD_LVGL_H_RES - 1;
+    }
+
+    s_touch_last_x = (lv_coord_t)tx;
     s_touch_last_y = (lv_coord_t)y;
     data->point.x = s_touch_last_x;
     data->point.y = s_touch_last_y;
     data->state = LV_INDEV_STATE_PR;
-}
-
-static void bsp_display_rounder_cb(lv_disp_drv_t *disp_drv, lv_area_t *area)
-{
-    (void)disp_drv;
-    uint16_t x1 = area->x1;
-    uint16_t y1 = area->y1;
-    uint16_t x2 = area->x2;
-    uint16_t y2 = area->y2;
-    area->x1 = (x1 >> 1) << 1;
-    area->y1 = (y1 >> 1) << 1;
-    area->x2 = ((x2 >> 1) << 1) + 1;
-    area->y2 = ((y2 >> 1) << 1) + 1;
 }
 
 static esp_err_t bsp_i2c_init(void)
@@ -177,8 +235,11 @@ esp_err_t bsp_watch_display_start(void)
     touch_ft3168_probe_normal_mode();
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    const size_t buf_lines = 48;
-    const int max_tx = (int)(BSP_LCD_H_RES * buf_lines * sizeof(uint16_t));
+    /* One LVGL draw stripe (pixels). SPI DMA must use DMA-capable RAM (not PSRAM-only draw buf). */
+    const int lvgl_buf_lines = 32;
+    const int row_bytes = (int)BSP_LCD_LVGL_H_RES * (int)sizeof(uint16_t);
+    /* SPI color TX is split in multiples of max_transfer_sz; keep it a multiple of one full row. */
+    const int max_tx = (64 * 1024 / row_bytes) * row_bytes;
     const spi_bus_config_t buscfg = {
         .sclk_io_num = BSP_LCD_PIN_PCLK,
         .data0_io_num = BSP_LCD_PIN_DATA0,
@@ -191,6 +252,7 @@ esp_err_t bsp_watch_display_start(void)
     ESP_RETURN_ON_ERROR(spi_bus_initialize(BSP_LCD_HOST, &buscfg, SPI_DMA_CH_AUTO), TAG, "spi_bus_initialize");
 
     esp_lcd_panel_io_spi_config_t io_spi_cfg = SH8601_PANEL_IO_QSPI_CONFIG(BSP_LCD_PIN_CS, NULL, NULL);
+    io_spi_cfg.trans_queue_depth = 16;
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)BSP_LCD_HOST, &io_spi_cfg, &s_lcd_io),
                         TAG, "panel_io_spi install");
 
@@ -214,30 +276,63 @@ esp_err_t bsp_watch_display_start(void)
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "lvgl_port_init");
 
-    const lvgl_port_display_cfg_t disp_cfg = {
-        .io_handle = s_lcd_io,
-        .panel_handle = panel,
-        .buffer_size = (uint32_t)(BSP_LCD_H_RES * buf_lines),
-        .double_buffer = true,
-        .hres = BSP_LCD_H_RES,
-        .vres = BSP_LCD_V_RES,
-        .monochrome = false,
-        .rotation = {.swap_xy = false, .mirror_x = false, .mirror_y = false},
-        .flags = {.buff_dma = true},
-    };
-    s_disp = lvgl_port_add_disp(&disp_cfg);
-    ESP_RETURN_ON_FALSE(s_disp != NULL, ESP_FAIL, TAG, "lvgl_port_add_disp");
+    /* Grab the LVGL mutex BEFORE add_disp so the LVGL task can't race a default-screen flush
+     * with the (still-default) offset_x/rounder_cb. Without this, the very first flush writes to
+     * panel cols 0..LVGL_W-1 instead of OFFSET..H_RES-1 and the right edge keeps stale GRAM
+     * (often bright green) until something else overwrites it. */
+    if (!lvgl_port_lock(portMAX_DELAY)) {
+        return ESP_ERR_TIMEOUT;
+    }
 
-#if LVGL_VERSION_MAJOR == 8
-    if (s_disp && s_disp->driver) {
-        s_disp->driver->rounder_cb = bsp_display_rounder_cb;
+    esp_err_t setup_err = ESP_OK;
+
+#if LV_COLOR_DEPTH == 16
+    const uint16_t bg565 = lv_color_hex(0x101418).full;
+
+    /* Full-panel pre-clear over the FULL addressable range (0..487 — see init seq comment)
+     * so neither the CO5300 left padding (cols 0..5) nor anything past the LVGL right
+     * edge can show stale AMOLED GRAM. With LVGL now writing the whole visible 466 cols
+     * starting at VIEW_OFFSET_X, this is mostly belt-and-suspenders, but boot looks
+     * cleaner if any stripe is delayed. */
+    setup_err = bsp_lcd_fill_panel_bg(panel, bg565);
+    if (setup_err != ESP_OK) {
+        lvgl_port_unlock();
+        ESP_LOGE(TAG, "panel pre-clear: %s", esp_err_to_name(setup_err));
+        return setup_err;
     }
 #endif
 
-    if (!lvgl_port_lock(0)) {
-        return ESP_ERR_TIMEOUT;
+    const lvgl_port_display_cfg_t disp_cfg = {
+        .io_handle = s_lcd_io,
+        .panel_handle = panel,
+        .buffer_size = (uint32_t)BSP_LCD_LVGL_H_RES * (uint32_t)lvgl_buf_lines,
+        .double_buffer = true,
+        .hres = BSP_LCD_LVGL_H_RES,
+        .vres = BSP_LCD_V_RES,
+        .monochrome = false,
+        .rotation = {.swap_xy = false, .mirror_x = false, .mirror_y = false},
+        .flags =
+            {
+                .buff_dma = true,
+                .buff_spiram = false,
+            },
+    };
+    s_disp = lvgl_port_add_disp(&disp_cfg);
+    if (s_disp == NULL) {
+        lvgl_port_unlock();
+        ESP_LOGE(TAG, "lvgl_port_add_disp failed");
+        return ESP_FAIL;
     }
-    s_touch_last_x = (lv_coord_t)(BSP_LCD_H_RES / 2);
+
+#if LVGL_VERSION_MAJOR == 8
+    if (s_disp->driver != NULL) {
+        /* Older esp_lvgl_port: no lvgl_port_display_cfg_t.rounder_cb — set LVGL driver hook directly. */
+        s_disp->driver->rounder_cb = bsp_lvgl_round_flush_width;
+        /* Map LVGL (0..LVGL_W-1) to panel columns (OFFSET..H_RES-1); fixes UI visually left-shifted. */
+        s_disp->driver->offset_x = (lv_coord_t)BSP_LCD_VIEW_OFFSET_X;
+    }
+#endif
+    s_touch_last_x = (lv_coord_t)(BSP_LCD_LVGL_H_RES / 2);
     s_touch_last_y = (lv_coord_t)(BSP_LCD_V_RES / 2);
     lv_indev_drv_init(&s_touch_indev_drv);
     s_touch_indev_drv.type = LV_INDEV_TYPE_POINTER;

@@ -1,0 +1,16 @@
+---
+description: watch-diy 圆形表盘（466×466）上 LVGL 布局与可读性约束
+alwaysApply: true
+---
+
+# 圆形表盘与 LVGL
+
+- 物理显示为**圆形**（466×466），四角在圆外会被裁切或不可见；表盘 UI 必须按**圆形安全区**排布，勿把关键信息压在四角。
+- 以屏心为参考：优先把主信息（时间）放在**中上/中心**；次要信息（电量、日期）放在**上沿内侧**（距顶边约 20–48 px、距左右边约 14–24 px），避免贴近圆边。
+- 宽控件（长按钮、整行列表）在表盘上使用**水平内缩**（常量如 **`ROUND_FACE_BTN_W`** / **`ROUND_FACE_TEXT_W`**），避免左右被圆切掉。
+- 不要在 `lv_screen` 上对 LVGL8 随意开 **`clip_corner` 大圆角裁剪**：易与抗锯齿文字叠加出错（字形发“斜”、局部花屏）；圆由物理玻璃裁切即可。
+- **AMOLED 主控有两种：SH8601 与 CO5300**（同板号通用）。**CO5300 的 466 可见列位于 panel cols 6..471**（左 6 px 不可见 padding）；SH8601 则是 0..465。表现差异是固定的：CO5300 上若 LVGL 不写 cols 466..471，右缘会**一直留一条亮绿**（AMOLED GRAM 默认色）——这不是 partial flush 问题，加多少 right-edge repaint 都没用。
+- 正确做法（已落到 `bsp_lcd.c` / `bsp_board.h`）：`BSP_LCD_VIEW_OFFSET_X = 6`（真 SH8601 设 0）、`BSP_LCD_LVGL_H_RES = BSP_LCD_H_RES = 466`、`disp_drv->offset_x = 6`，让 LVGL 写满 panel cols `6..471`；init seq 的 CASET/RASET 端点扩到 `0x01E7=487` 覆盖整段地址。
+- **SH8601/CO5300 硬性要求 CASET/RASET 端点偶数对齐**（Waveshare README）：`rounder_cb` 必须**同时对 x 与 y** 取偶（x1/y1 向下取偶、x2/y2 向上取奇，end-exclusive 即偶）。只对 x 对齐会留下字形发"斜"等次生问题。
+- `bsp_lvgl_round_flush_width` 同时把 x 宽到整行（`drv->hor_res-1`），让 SPI DMA 按行对齐，避免分包跨行造成右缘竖条。
+- 与 `bsp_board.h` 一致：物理宽高用 **`BSP_LCD_H_RES` / `BSP_LCD_V_RES`**；LVGL 水平逻辑宽度用 **`BSP_LCD_LVGL_H_RES`**（此项目恢复为 466，不再减偏移），勿把 UI 宽度按其它值写死。

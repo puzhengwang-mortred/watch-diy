@@ -1,6 +1,7 @@
 #include "watch_app.h"
 
 #include "bsp_lcd.h"
+#include "svc_batt.h"
 #include "svc_rtc.h"
 #include "svc_system.h"
 #include "svc_timesync_wifi.h"
@@ -20,6 +21,11 @@ void watch_app_start(void)
     esp_err_t rtc = svc_rtc_init();
     if (rtc != ESP_OK) {
         ESP_LOGW(TAG, "RTC init: %s", esp_err_to_name(rtc));
+    }
+
+    esp_err_t batt = svc_batt_init();
+    if (batt != ESP_OK) {
+        ESP_LOGW(TAG, "Battery ADC init: %s", esp_err_to_name(batt));
     }
 
     if (lvgl_port_lock(0)) {
