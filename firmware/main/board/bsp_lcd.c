@@ -80,6 +80,20 @@ static const sh8601_lcd_init_cmd_t s_lcd_init_cmds[] = {
 static lv_disp_t *s_disp;
 static esp_lcd_panel_io_handle_t s_lcd_io;
 static lv_indev_drv_t s_touch_indev_drv;
+static esp_lcd_panel_handle_t s_panel;
+
+esp_err_t bsp_lcd_display_set_awake(bool awake)
+{
+    if (s_panel == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!lvgl_port_lock(pdMS_TO_TICKS(200))) {
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t err = esp_lcd_panel_disp_on_off(s_panel, awake);
+    lvgl_port_unlock();
+    return err;
+}
 
 /* SH8601/CO5300 hard requirement (Waveshare README): every CASET/RASET endpoint must be
  * even-aligned. We must round both axes — rounding x only used to mask the symptom but
@@ -269,6 +283,7 @@ esp_err_t bsp_watch_display_start(void)
     };
     esp_lcd_panel_handle_t panel = NULL;
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_sh8601(s_lcd_io, &panel_cfg, &panel), TAG, "panel sh8601");
+    s_panel = panel;
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel), TAG, "reset");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel), TAG, "init");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel, true), TAG, "disp on");

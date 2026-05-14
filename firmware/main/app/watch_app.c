@@ -4,6 +4,7 @@
 #include "svc_batt.h"
 #include "svc_rtc.h"
 #include "svc_system.h"
+#include "svc_display_idle.h"
 #include "svc_timesync_wifi.h"
 #include "ui_demo.h"
 
@@ -34,6 +35,8 @@ void watch_app_start(void)
     }
 
     ESP_LOGI(TAG, "LVGL UI started");
+
+    svc_display_idle_init();
 
     svc_timesync_wifi_start();
 }

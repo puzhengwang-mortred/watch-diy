@@ -20,3 +20,15 @@ menu "Watch WiFi / SNTP (roadmap 1.3)"
         default ""
 
 endmenu
+
+menu "Watch display power (roadmap 1.5)"
+
+    config WATCH_DISPLAY_IDLE_TIMEOUT_SEC
+        int "Blank display after idle seconds (0 = off)"
+        range 0 3600
+        default 30
+        help
+            Uses LVGL pointer inactivity (last PRESS). After this many idle seconds,
+            panel DISPOFF via bsp_lcd; next touch wakes (DISPON + full scr invalidate).
+
+endmenu

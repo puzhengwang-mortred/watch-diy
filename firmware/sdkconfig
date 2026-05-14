@@ -522,6 +522,12 @@ CONFIG_WATCH_WIFI_STA_PASSWORD="IAVGuest862139570917"
 # end of Watch WiFi / SNTP (roadmap 1.3)
 
 #
+# Watch display power (roadmap 1.5)
+#
+CONFIG_WATCH_DISPLAY_IDLE_TIMEOUT_SEC=30
+# end of Watch display power (roadmap 1.5)
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
