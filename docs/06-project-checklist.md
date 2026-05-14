@@ -1,7 +1,8 @@
 # 06 - 项目执行清单（P0～P5，可打勾）
 
 > 用法：在编辑器里把 `- [ ]` 改成 `- [x]` 表示已完成；或直接在支持任务列表的预览里勾选。  
-> 详细需求见 [01-功能性需求](01-requirements-functional.md)、硬件见 [03-硬件设计](03-hardware-design.md)。
+> 详细需求见 [01-功能性需求](01-requirements-functional.md)、硬件见 [03-硬件设计](03-hardware-design.md)。  
+> **阶段性开发目标与验收表（从当前固件到产品形态）**见 [07-开发路线图](07-development-roadmap.md)。
 
 ---
 
@@ -72,10 +73,28 @@
 - [ ] 解析经纬度（NMEA 或 `AT+QGPSLOC` 等模组指令，以你评估板文档为准）
 - [ ] 室内/窗边：记录「无 fix / LBS 回退」行为，供后端融合策略参考
 
-### P0.7 功耗与热（粗测）
+### P0.7 功耗与热（粗测 + 子系统功耗基线）
 
-- [ ] 4G 注册待机电流范围（心里有数即可）
-- [ ] 数据业务（上传小文件或长连接 MQTT）时模组表面温度手触是否可接受（烫手则 P4 布局要加重散热）
+> 目的：整机续航在 **P5** 才精测；**P0** 须建立 **各子系统电流/发热数量级**，便于发现异常漏电、模组未休眠、GNSS 常开等问题。与 [02 - NFR-PWR](02-requirements-nonfunctional.md)「功耗测量阶段约定」一致。
+
+**最低要求（仍须勾选）**
+
+- [ ] 4G **驻网待机** 电流有大致范围（心里有数 / 或记下 mA）
+- [ ] **传数据**（MQTT 一小段或 TCP 脉冲）时模组 **表面温度** 手触可接受（烫手则 P4 布局须加重散热）
+
+**子系统基线（建议逐项记录到 `hardware/docs/p0-log.md` 或表格）**
+
+测量方式：**USB 供电粗测**或 **万用表串入 5V 供电线** 估整机/板总电流；备注供电方式（单 4G 板 / 与 ESP 同供）。
+
+| 子系统 | 建议工况 | 记录内容 |
+|--------|----------|----------|
+| **屏幕** | 亮屏最高亮度 vs 息屏/关背光（若可调） | 相对电流档位或 mA；是否明显发热 |
+| **4G** | 仅注册待机 vs PDP 已激活空闲 vs 传数据 30s | 三档电流/体感；模组壳温 |
+| **GNSS** | 冷启动搜星前 2min vs 已定位维持 | 电流峰值、是否显著烫手；无 GNSS 料号则写「跳过 / 仅 LBS」 |
+| **录音** | I2S 采集（麦克风接到后补测；P0 可跳过） | 相对基线增量 |
+
+- [ ] 上表至少 **屏幕、4G、GNSS** 三行有记录（录音可标 N/A）
+- [ ] （可选）有 **万用表电流档** 时，在备注中写 **粗 mA**，便于与 NFR 预算对照
 
 ### P0.8 P0 收口判定（全勾才算 P0 完成）
 
@@ -87,14 +106,27 @@
 
 ## P1 固件原型（开发板上的软件）
 
-**目标**：在圆屏开发板上跑通 UI + AT 驱动骨架 + 与后端的安全连接（可先 mock）。
+> **与 P0 并行**：硬件在途时，可先完成 **§P1.0**（仅电脑、不接板也可 `build`）；**LVGL / 触摸 / 麦克风 / 接 4G UART** 等须等圆屏板与蜂窝板到货后继续。
+
+### P1.0 无硬件可并行（编译链）
+
+- [ ] 本机 ESP-IDF 已安装，`idf.py --version` 正常
+- [ ] 在仓库 `firmware/` 目录执行 `idf.py set-target esp32s3` 与 `idf.py build` **无报错**（可不接 USB，见 [firmware/README.md](../firmware/README.md)）
+
+**固件目录与命令（与 [07-开发路线图](07-development-roadmap.md) 阶段 0.4 一致，便于检索）**
+
+- **工程根目录（须 `cd` 到此再执行 `idf.py`）**：仓库内 **`watch-diy/firmware/`**（完整路径示例：`d:\repository\watch-diy\firmware`）。
+- **编译**：`idf.py build` → 产物如 **`firmware/build/watch_diy_fw.bin`**（以 `CMakeLists.txt` 中 `project()` 名为准）。
+- **烧录**：`idf.py -p COMx flash`（`COMx` 换成本机端口）。
+- **监视**：`idf.py -p COMx monitor`；或一条命令 **`idf.py -p COMx flash monitor`**。
+- **分区表（与 07 阶段 0.3 一致）**：`firmware/partitions_watch.csv`，Kconfig 中 **`CONFIG_PARTITION_TABLE_CUSTOM_FILENAME`** 指向该文件；用途与 OTA 占位说明见 [firmware/README.md](../firmware/README.md) 内「分区表（阶段 0.3）」一节。
 
 ### P1.1 工程与显示
 
-- [ ] 新建 `firmware/` ESP-IDF 工程，目标芯片 ESP32-S3，PSRAM Octal 打开
+- [x] 仓库内已初始化 **`firmware/`** ESP-IDF 工程骨架（`CMakeLists.txt`、`main/`、`sdkconfig.defaults`，说明见 `firmware/README.md`）
 - [ ] 集成 **LVGL 9.x**，圆屏 466×466 显示正常（无撕裂可后调 TE）
 - [ ] 表盘页：时间、电量（可先假数据）、信号图标占位
-- [ ] 触摸：滑动/点击事件进页面栈（可先只做 2～3 个空页面）
+- [x] 触摸：三屏 **`lv_scr_load` 切换**（表盘 / 设置列表 / 关于），无重复 `create` 泄漏路径（见 `ui_demo.c`）
 
 ### P1.2 EC800 驱动骨架（N/K/M 以实际料号为准）
 
@@ -122,6 +154,21 @@
 - [ ] AT 驱动能支撑：**PDP + MQTT + GNSS**（及可选 pstn）同一套工程里切换不崩溃
 - [ ] 自签 TLS 在设备上 **无证书错误**
 
+### P1.6 功耗建模与低功耗（与 [02 - NFR-PWR-001 / 006](02-requirements-nonfunctional.md) 对齐）
+
+> **P1 末 / P2 初**至少要有 **可开可关、能测电流差** 的实验；不要求手表已达 24h 续航。
+
+- [ ] **24h 纸面 mAh**：用 P0.7 粗测电流 + 计划占空比（MQTT 间隔、GNSS 频次等）做 **一页表格**，验证 **500mAh 量级电池** 与 **NFR-PWR-001** 不自相矛盾（存 `hardware/docs/power-model.md` 或表格）
+- [ ] **ESP32-S3**：至少一种 **Light sleep**（或 Deep sleep）路径可被定时器/GPIO 唤醒，且实测 **休眠前后电流差**
+- [ ] **蜂窝模组**：阅读 AT 手册中 **PSM / eDRX**（若支持）；在开发板上做 **开关各一轮**，记录对 **驻网、MQTT 下行时延** 的影响
+- [ ] 在 [04-固件架构](04-firmware-architecture.md) 或 `firmware/` 内文档 **记下结论**：哪些策略 **进 V1**，哪些 **延到 P4**
+
+### P1.7 内存与并发（与 [04 - §3.2 / §3.5](04-firmware-architecture.md) 对齐）
+
+- [ ] 代码或配置中落实 **模块 PSRAM 上限**（LVGL / AT / Opus / TLS 等），避免匿名大块泄漏
+- [ ] **压测**：表盘 + MQTT +（可选）注入长 URC 或模拟 RX + Opus 编码，**≥10 分钟** 无堆分配失败；`min free PSRAM` 不低于 **04 §3.5.3** 约定阈值（无则先记最小值日志备查）
+- [ ] 实现或文档化 **`resource_arbiter` 优先级**：至少覆盖 **录音上传进行时，GNSS 定时采集让路**（与 04 默认策略一致）
+
 ---
 
 ## P2 后端 + 家长 APP（可并行）
@@ -130,10 +177,10 @@
 
 ### P2.1 服务器与 TLS
 
-- [ ] 云主机 `/opt/watch/` 目录与 `docker-compose` 骨架就位
-- [ ] 生成 **自签 CA + 服务器证书（SAN=公网 IP）**，Caddy `:18443` 可访问
-- [ ] 安全组放行：`18443`、`18883`、`19000`（及 SSH 仅你家 IP，若可配）
-- [ ] 浏览器或 `curl -k` 验证证书链（理解 `-k` 与正式客户端 pinning 区别）
+- [x] 云主机 `/opt/watch/` 目录与 `docker-compose` 骨架就位
+- [x] 生成 **自签 CA + 服务器证书（SAN=公网 IP）**，Caddy `:18443` 可访问
+- [x] 安全组放行：`18443`、`18883`、`19000`（及 SSH 仅你家 IP，若可配）
+- [x] 浏览器或 `curl -k` 验证证书链（理解 `-k` 与正式客户端 pinning 区别）
 
 ### P2.2 数据与中间件
 

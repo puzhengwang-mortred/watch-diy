@@ -1,0 +1,26 @@
+# watch-diy: Phase 1 — TLS edge + /health only (Caddy).
+# Generate certs first: ./scripts/gen-certs.sh <PUBLIC_IPV4>
+#
+# Security group / firewall: allow TCP 18443 from your IPs (and later 18883 for MQTT).
+# If `docker compose pull` times out on docker.io: configure Docker registry-mirror (README §「Docker Hub 不可达」).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "18443:18443"
+    command:
+      - caddy
+      - run
+      - --config
+      - /etc/caddy/Caddyfile
+      - --adapter
+      - caddyfile
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:

@@ -1,4 +1,6 @@
 # ===== Secrets / Certs =====
+/certs/
+/certs-from-server/
 ca.key
 *.pem.key
 secrets/
@@ -15,7 +17,9 @@ firmware/managed_components/
 *.elf
 *.map
 
-# ===== Go server =====
+# ===== Go server / Caddy certs =====
+server/caddy/certs/*
+!server/caddy/certs/.gitkeep
 server/bin/
 server/vendor/
 server/coverage.out

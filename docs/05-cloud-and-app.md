@@ -64,6 +64,21 @@ flowchart TB
 
 ## 2. 后端单机部署
 
+### 2.0 当前云主机规格（事实记录）
+
+> 用途：固定当前自建后端的运行环境基线，避免重复核对。更换机器或升级内核后请同步更新本小节。
+
+| 项 | 值 |
+| --- | --- |
+| CPU | AMD EPYC 9Y24 96-Core Processor |
+| 内存 | 31 GiB 总量；Swap 未配置（0） |
+| 系统盘 | `/`：`/dev/vda2`，约 99 GiB，约 7.7 GiB 已用、约 87 GiB 可用（约 9%） |
+| 引导分区 | `/boot/efi`：`/dev/vda1`，约 197 MiB |
+| 操作系统 | Ubuntu 22.04.4 LTS |
+| 内核 | 5.15.0-100-generic |
+| Docker Engine | 29.4.0（已核对） |
+| Docker Compose（`docker compose` CLI 插件） | v5.1.2（已核对） |
+
 ### 2.1 服务器目录布局
 
 ```

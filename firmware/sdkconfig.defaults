@@ -1,0 +1,29 @@
+# ESP32-S3 + Octal PSRAM (watch-diy scaffold; Waveshare 1.43 N16R8 class boards)
+# Target is set by: idf.py set-target esp32s3 (do not set CONFIG_IDF_TARGET here)
+# Flash: 16MB (N16); aligns binary header with chip to avoid spi_flash size warning
+
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_BOOT_INIT=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+CONFIG_FREERTOS_HZ=1000
+
+# LVGL: Montserrat 14 UI + 48 clock (English UI; avoids SimSun CJK subset issues)
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
+# CONFIG_LV_FONT_SIMSUN_16_CJK is not set
+# CONFIG_LV_FONT_DEFAULT_SIMSUN_16_CJK is not set
+
+# Faster indev polling so short taps are not missed between samples (default 30ms is too slow)
+CONFIG_LV_INDEV_DEF_READ_PERIOD=10
+
+# Custom partition table: factory + ota_0/ota_1 + otadata placeholder (see partitions_watch.csv)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_watch.csv"
+# CONFIG_PARTITION_TABLE_SINGLE_APP is not set

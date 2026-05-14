@@ -8,10 +8,10 @@
 |---|---|
 | [`docs/`](docs/) | 需求文档与设计文档（先看这里） |
 | [`hardware/`](hardware/) | KiCad 原理图、PCB、3D 表壳模型、BOM |
-| [`firmware/`](firmware/) | 手表端固件（ESP-IDF v5.x + FreeRTOS + LVGL） |
-| [`server/`](server/) | 后端（Go + Gin + EMQX + PostgreSQL + MinIO） |
+| [`firmware/`](firmware/) | 手表端固件（ESP-IDF；**先读** [firmware/README.md](firmware/README.md)） |
+| [`server/`](server/) | 边缘与后端（**阶段1**：[server/README.md](server/README.md) Caddy + 自签 TLS + `/health`） |
 | [`app/`](app/) | 家长 APP（Flutter，iOS + Android） |
-| [`tools/`](tools/) | 自签证书生成、固件烧录、批量配置等脚本 |
+| [`tools/`](tools/) | 固件烧录、批量配置等（自签证书见 `server/scripts/gen-certs.sh`） |
 
 ## 文档入口
 
@@ -24,6 +24,16 @@
 | 04 | [固件架构](docs/04-firmware-architecture.md) | Task 划分、内存预算、状态机、AT 驱动 |
 | 05 | [后端与 APP 架构](docs/05-cloud-and-app.md) | API、MQTT topic、数据模型、APP 信息架构 |
 | 06 | [项目执行清单（P0–P5）](docs/06-project-checklist.md) | 分阶段 step-by-step，`- [ ]` 打勾跟踪进度 |
+| 07 | [开发路线图](docs/07-development-roadmap.md) | 从当前固件到产品形态的阶段目标与验收表 |
+
+## 云服务器 Docker（已核对）
+
+当前自建云主机上已确认（与 [`docs/05-cloud-and-app.md`](docs/05-cloud-and-app.md) §2.0 主机规格同机）：
+
+| 项 | 版本 |
+|---|---|
+| Docker Engine | 29.4.0 |
+| Docker Compose（`docker compose` CLI 插件） | v5.1.2 |
 
 ## 关键技术决策（速览）
 

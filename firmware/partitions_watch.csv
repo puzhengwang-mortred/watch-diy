@@ -1,0 +1,16 @@
+# ESP-IDF Partition Table
+# watch-diy: 16 MB Flash layout (ESP32-S3). See firmware/README "Partition table".
+#
+# Current boot: factory (idf.py flash writes factory by default).
+# Reserved for 07 roadmap / 04 OTA (not implemented yet):
+#   - otadata: esp_ota_* boot slot metadata when OTA is enabled.
+#   - ota_0 / ota_1: same size as factory for A/B app images (see ESP-IDF app OTA guide).
+# Until OTA is wired, do not erase otadata unless you follow IDF OTA docs.
+#
+# Name,     Type, SubType, Offset,  Size,     Flags
+nvs,        data, nvs,     0x9000,  0x6000,
+otadata,    data, ota,     ,        0x2000,
+phy_init,   data, phy,     ,        0x1000,
+factory,    app,  factory, ,        0x200000,
+ota_0,      app,  ota_0,   ,        0x200000,
+ota_1,      app,  ota_1,   ,        0x200000,

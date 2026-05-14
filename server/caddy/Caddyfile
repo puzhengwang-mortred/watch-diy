@@ -1,0 +1,30 @@
+{
+	auto_https off
+	admin off
+}
+
+# HTTPS with self-signed cert (SAN = server public IP). Port 18443 — see docs/05-cloud-and-app.md
+:18443 {
+	tls /etc/caddy/certs/server.crt /etc/caddy/certs/server.key
+
+	log {
+		output stdout
+		format console
+	}
+
+	encode zstd gzip
+
+	handle /health {
+		header Content-Type text/plain
+		respond "ok" 200
+	}
+
+	# Future: reverse_proxy api:8080 — add when Go API image exists
+	handle /api/* {
+		respond "api not deployed yet" 503
+	}
+
+	handle {
+		respond "watch-diy edge" 200
+	}
+}

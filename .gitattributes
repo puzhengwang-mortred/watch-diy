@@ -1,0 +1,2 @@
+# Shell scripts must use LF on disk so Linux shebang works (avoid bash\r).
+*.sh text eol=lf

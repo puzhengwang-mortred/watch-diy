@@ -1,0 +1,4 @@
+## Waveshare ESP32-S3-Touch-AMOLED-1.43: LVGL + 触摸；SH8601 驱动在工程内 firmware/components/esp_lcd_sh8601（绕过 registry 的 idf>=5.3 限制，便于 ESP-IDF 5.2.x）
+dependencies:
+  espressif/esp_lvgl_port: "1.4.0"
+  lvgl/lvgl: "~8.3.0"
