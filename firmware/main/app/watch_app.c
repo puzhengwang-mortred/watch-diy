@@ -1,6 +1,7 @@
 #include "watch_app.h"
 
 #include "bsp_lcd.h"
+#include "svc_rtc.h"
 #include "svc_system.h"
 #include "ui_demo.h"
 
@@ -14,6 +15,11 @@ void watch_app_start(void)
 {
     ESP_ERROR_CHECK(svc_system_early_init());
     ESP_ERROR_CHECK(bsp_watch_display_start());
+
+    esp_err_t rtc = svc_rtc_init();
+    if (rtc != ESP_OK) {
+        ESP_LOGW(TAG, "RTC init: %s", esp_err_to_name(rtc));
+    }
 
     if (lvgl_port_lock(0)) {
         ui_demo_show();

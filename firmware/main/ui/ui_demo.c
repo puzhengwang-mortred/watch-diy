@@ -2,6 +2,7 @@
 
 #include "esp_app_desc.h"
 #include "lvgl.h"
+#include "svc_rtc.h"
 
 #include <stdio.h>
 
@@ -30,6 +31,36 @@ static void font_ui_list_btn(lv_obj_t *btn)
 static lv_obj_t *s_scr_watch;
 static lv_obj_t *s_scr_settings;
 static lv_obj_t *s_scr_about;
+
+static lv_obj_t *s_watch_time_lbl;
+static lv_obj_t *s_watch_date_lbl;
+
+static void watch_clock_refresh(void)
+{
+    if (s_watch_time_lbl == NULL || s_watch_date_lbl == NULL) {
+        return;
+    }
+
+    svc_rtc_datetime_t dt;
+    char tbuf[16];
+    char dbuf[24];
+
+    if (svc_rtc_have_chip() && svc_rtc_read_local(&dt) == ESP_OK && dt.valid) {
+        (void)snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d", dt.hour, dt.min, dt.sec);
+        (void)snprintf(dbuf, sizeof(dbuf), "%04d-%02d-%02d", dt.year, dt.mon, dt.mday);
+        lv_label_set_text(s_watch_time_lbl, tbuf);
+        lv_label_set_text(s_watch_date_lbl, dbuf);
+    } else {
+        lv_label_set_text(s_watch_time_lbl, "--:--:--");
+        lv_label_set_text(s_watch_date_lbl, svc_rtc_have_chip() ? "RTC invalid" : "RTC offline");
+    }
+}
+
+static void watch_clock_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    watch_clock_refresh();
+}
 
 static void apply_scr_style(lv_obj_t *scr)
 {
@@ -76,17 +107,19 @@ static void build_watch(lv_obj_t *scr)
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 28);
 
     lv_obj_t *time_lbl = lv_label_create(scr);
-    lv_label_set_text(time_lbl, "12:34");
+    lv_label_set_text(time_lbl, "--:--:--");
     lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xe8ecf0), 0);
     lv_obj_align(time_lbl, LV_ALIGN_CENTER, 0, -16);
+    s_watch_time_lbl = time_lbl;
 
-    lv_obj_t *hint = lv_label_create(scr);
-    lv_label_set_text(hint, "Time placeholder; RTC in roadmap 1.2");
-    style_hint(hint);
-    lv_obj_set_width(hint, LV_HOR_RES - 32);
-    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-    lv_obj_align(hint, LV_ALIGN_CENTER, 0, 52);
+    lv_obj_t *date_lbl = lv_label_create(scr);
+    lv_label_set_text(date_lbl, "---");
+    style_hint(date_lbl);
+    lv_obj_set_width(date_lbl, LV_HOR_RES - 32);
+    lv_label_set_long_mode(date_lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_align(date_lbl, LV_ALIGN_CENTER, 0, 52);
+    s_watch_date_lbl = date_lbl;
 
     lv_obj_t *btn = lv_btn_create(scr);
     lv_obj_set_width(btn, LV_HOR_RES - 48);
@@ -178,6 +211,9 @@ void ui_demo_show(void)
     if (prev != NULL && prev != s_scr_watch && prev != s_scr_settings && prev != s_scr_about) {
         lv_obj_del(prev);
     }
+
+    watch_clock_refresh();
+    lv_timer_create(watch_clock_timer_cb, 1000, NULL);
 
     s_done = true;
 }

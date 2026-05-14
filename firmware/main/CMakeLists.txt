@@ -5,6 +5,7 @@ idf_component_register(
         "board/bsp_lcd.c"
         "ui/ui_demo.c"
         "services/svc_system.c"
+        "services/svc_rtc.c"
     INCLUDE_DIRS
         "."
         "app"

@@ -23,3 +23,5 @@
 #define BSP_I2C_SDA            GPIO_NUM_47
 #define BSP_I2C_SCL            GPIO_NUM_48
 #define BSP_TOUCH_I2C_ADDR     0x38
+/** NXP PCF85063A fixed 7-bit address; same I2C bus as touch (bsp_lcd.c). */
+#define BSP_RTC_I2C_ADDR       0x51
