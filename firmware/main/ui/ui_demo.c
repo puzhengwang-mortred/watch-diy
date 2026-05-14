@@ -9,9 +9,11 @@
 
 #include <stdio.h>
 
-/* Large clock digits: Montserrat 48; UI labels: Montserrat 14 (see sdkconfig.defaults). */
+/* Clock: Montserrat 48 (do not use transform_zoom on the row parent — SW renderer may skip drawing). */
 LV_FONT_DECLARE(lv_font_montserrat_48)
 LV_FONT_DECLARE(lv_font_montserrat_14)
+
+static const lv_font_t *const k_clock_font = &lv_font_montserrat_48;
 
 static void font_ui(lv_obj_t *obj)
 {
@@ -35,7 +37,8 @@ static lv_obj_t *s_scr_watch;
 static lv_obj_t *s_scr_settings;
 static lv_obj_t *s_scr_about;
 
-static lv_obj_t *s_watch_time_lbl;
+/** Six digit slots HH MM SS (Montserrat is proportional — fixed slot width stops layout jump). */
+static lv_obj_t *s_watch_clock_digit[6];
 static lv_obj_t *s_watch_date_lbl;
 static lv_obj_t *s_watch_batt_lbl;
 static lv_obj_t *s_batt_outline;
@@ -90,23 +93,34 @@ static void watch_batt_refresh(void)
     }
 }
 
+static void clock_digit_set(lv_obj_t *lbl, char c)
+{
+    char s[2] = {c, '\0'};
+    lv_label_set_text(lbl, s);
+}
+
 static void watch_clock_refresh(void)
 {
-    if (s_watch_time_lbl == NULL || s_watch_date_lbl == NULL) {
+    if (s_watch_clock_digit[0] == NULL || s_watch_date_lbl == NULL) {
         return;
     }
 
     svc_rtc_datetime_t dt;
-    char tbuf[16];
     char dbuf[24];
 
     if (svc_rtc_have_chip() && svc_rtc_read_local(&dt) == ESP_OK && dt.valid) {
-        (void)snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d", dt.hour, dt.min, dt.sec);
+        clock_digit_set(s_watch_clock_digit[0], (char)('0' + (dt.hour / 10)));
+        clock_digit_set(s_watch_clock_digit[1], (char)('0' + (dt.hour % 10)));
+        clock_digit_set(s_watch_clock_digit[2], (char)('0' + (dt.min / 10)));
+        clock_digit_set(s_watch_clock_digit[3], (char)('0' + (dt.min % 10)));
+        clock_digit_set(s_watch_clock_digit[4], (char)('0' + (dt.sec / 10)));
+        clock_digit_set(s_watch_clock_digit[5], (char)('0' + (dt.sec % 10)));
         (void)snprintf(dbuf, sizeof(dbuf), "%04d-%02d-%02d", dt.year, dt.mon, dt.mday);
-        lv_label_set_text(s_watch_time_lbl, tbuf);
         lv_label_set_text(s_watch_date_lbl, dbuf);
     } else {
-        lv_label_set_text(s_watch_time_lbl, "--:--:--");
+        for (int i = 0; i < 6; i++) {
+            clock_digit_set(s_watch_clock_digit[i], '-');
+        }
         lv_label_set_text(s_watch_date_lbl, svc_rtc_have_chip() ? "RTC invalid" : "RTC offline");
     }
 }
@@ -117,6 +131,10 @@ static void watch_clock_timer_cb(lv_timer_t *t)
     watch_clock_refresh();
     watch_batt_refresh();
 }
+
+/** Tight grid; ~38×48 px digit slots fit Montserrat 48 without wiping glyphs (34 was marginal under clip). */
+#define CLOCK_DIGIT_SLOT_W 38
+#define CLOCK_COLON_SLOT_W 16
 
 /** Bottom chord at ~y=430 allows ~300px wide centered bar; keep margin inside circle. */
 #define ROUND_FACE_BTN_W 280
@@ -160,6 +178,19 @@ static void style_btn(lv_obj_t *btn)
     lv_obj_set_style_radius(btn, 12, 0);
     lv_obj_set_style_pad_top(btn, 10, 0);
     lv_obj_set_style_pad_bottom(btn, 10, 0);
+}
+
+static lv_obj_t *clock_slot_create(lv_obj_t *row, lv_coord_t slot_w, const char *init_txt)
+{
+    lv_obj_t *lbl = lv_label_create(row);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(lbl, slot_w);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(lbl, k_clock_font, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0xe8ecf0), 0);
+    lv_label_set_text(lbl, init_txt);
+    lv_obj_clear_flag(lbl, LV_OBJ_FLAG_SCROLLABLE);
+    return lbl;
 }
 
 static void build_watch(lv_obj_t *scr)
@@ -217,12 +248,38 @@ static void build_watch(lv_obj_t *scr)
     lv_obj_align_to(batt_lbl, nub, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
     s_watch_batt_lbl = batt_lbl;
 
-    lv_obj_t *time_lbl = lv_label_create(scr);
-    lv_label_set_text(time_lbl, "--:--:--");
-    lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xe8ecf0), 0);
-    lv_obj_align(time_lbl, LV_ALIGN_CENTER, 0, -16);
-    s_watch_time_lbl = time_lbl;
+    lv_obj_t *clock_row = lv_obj_create(scr);
+    lv_obj_remove_style_all(clock_row);
+    lv_obj_set_style_bg_opa(clock_row, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(clock_row, LV_OBJ_FLAG_SCROLLABLE);
+    const lv_coord_t clock_h = lv_font_get_line_height(k_clock_font) + 6;
+    const lv_coord_t clock_w = (lv_coord_t)(6 * CLOCK_DIGIT_SLOT_W + 2 * CLOCK_COLON_SLOT_W);
+    lv_obj_set_size(clock_row, clock_w, clock_h);
+    lv_obj_align(clock_row, LV_ALIGN_CENTER, 0, -18);
+
+    lv_obj_t *d0 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align(d0, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *d1 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align_to(d1, d0, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *c0 = clock_slot_create(clock_row, CLOCK_COLON_SLOT_W, ":");
+    lv_obj_align_to(c0, d1, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *d2 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align_to(d2, c0, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *d3 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align_to(d3, d2, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *c1 = clock_slot_create(clock_row, CLOCK_COLON_SLOT_W, ":");
+    lv_obj_align_to(c1, d3, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *d4 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align_to(d4, c1, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+    lv_obj_t *d5 = clock_slot_create(clock_row, CLOCK_DIGIT_SLOT_W, "8");
+    lv_obj_align_to(d5, d4, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+
+    s_watch_clock_digit[0] = d0;
+    s_watch_clock_digit[1] = d1;
+    s_watch_clock_digit[2] = d2;
+    s_watch_clock_digit[3] = d3;
+    s_watch_clock_digit[4] = d4;
+    s_watch_clock_digit[5] = d5;
 
     lv_obj_t *date_lbl = lv_label_create(scr);
     lv_label_set_text(date_lbl, "---");
