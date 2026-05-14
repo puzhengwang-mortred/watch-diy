@@ -26,3 +26,9 @@ bool svc_rtc_have_chip(void);
 
 /** Read time/date; sets valid=false if bus/OS/out-of-range. */
 esp_err_t svc_rtc_read_local(svc_rtc_datetime_t *out);
+
+/**
+ * Write calendar + time to PCF85063 (STOP during burst, then restart).
+ * Fields are wall time (same convention as read); year 2000–2099.
+ */
+esp_err_t svc_rtc_write_local(const svc_rtc_datetime_t *in);

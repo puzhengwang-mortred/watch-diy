@@ -27,6 +27,21 @@ static int bcd_to_int(uint8_t v, uint8_t mask)
     return (int)(v & 0x0FU) + (int)((v >> 4) & 0x0FU) * 10;
 }
 
+/** Sakamoto: 0 = Sunday … 6 = Saturday (same as tm_wday). */
+static int weekday_from_ymd(int y, int m, int d)
+{
+    static const int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    y -= (m < 3);
+    return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+
+static uint8_t int_to_bcd(int v)
+{
+    int tens = v / 10;
+    int ones = v % 10;
+    return (uint8_t)((tens << 4) | ones);
+}
+
 static esp_err_t rtc_read_reg(uint8_t reg, uint8_t *buf, size_t len)
 {
     return i2c_master_write_read_device(BSP_I2C_NUM, BSP_RTC_I2C_ADDR, &reg, 1, buf, len,
@@ -123,4 +138,54 @@ esp_err_t svc_rtc_read_local(svc_rtc_datetime_t *out)
     out->sec = sec;
     out->valid = true;
     return ESP_OK;
+}
+
+esp_err_t svc_rtc_write_local(const svc_rtc_datetime_t *in)
+{
+    if (in == NULL || !s_have_chip) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (in->sec < 0 || in->sec > 59 || in->min < 0 || in->min > 59 || in->hour < 0 || in->hour > 23 || in->mday < 1 ||
+        in->mday > 31 || in->mon < 1 || in->mon > 12) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (in->year < 2000 || in->year > 2099) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int year2 = in->year - 2000;
+    int wday = weekday_from_ymd(in->year, in->mon, in->mday);
+
+    uint8_t ctrl1 = 0;
+    esp_err_t err = rtc_read_reg(PCF85063_REG_CTRL1, &ctrl1, 1);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = rtc_write_reg(PCF85063_REG_CTRL1, (uint8_t)(ctrl1 | PCF85063_CTRL1_STOP));
+    if (err != ESP_OK) {
+        return err;
+    }
+    vTaskDelay(pdMS_TO_TICKS(2));
+
+    uint8_t wbuf[8];
+    wbuf[0] = PCF85063_REG_SECONDS;
+    wbuf[1] = (uint8_t)(int_to_bcd(in->sec) & 0x7FU);
+    wbuf[2] = (uint8_t)(int_to_bcd(in->min) & 0x7FU);
+    wbuf[3] = (uint8_t)(int_to_bcd(in->hour) & 0x3FU);
+    wbuf[4] = (uint8_t)(int_to_bcd(in->mday) & 0x3FU);
+    wbuf[5] = (uint8_t)(wday & 0x07U);
+    wbuf[6] = (uint8_t)(int_to_bcd(in->mon) & 0x1FU);
+    wbuf[7] = (uint8_t)(int_to_bcd(year2) & 0xFFU);
+
+    err = i2c_master_write_to_device(BSP_I2C_NUM, BSP_RTC_I2C_ADDR, wbuf, sizeof(wbuf),
+                                     pdMS_TO_TICKS(RTC_I2C_TIMEOUT_MS));
+    if (err != ESP_OK) {
+        (void)rtc_write_reg(PCF85063_REG_CTRL1, ctrl1);
+        return err;
+    }
+
+    err = rtc_write_reg(PCF85063_REG_CTRL1, (uint8_t)(ctrl1 & (uint8_t)~PCF85063_CTRL1_STOP));
+    vTaskDelay(pdMS_TO_TICKS(2));
+    return err;
 }

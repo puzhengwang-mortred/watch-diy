@@ -1,0 +1,22 @@
+menu "Watch WiFi / SNTP (roadmap 1.3)"
+
+    config WATCH_WIFI_STA_ENABLE
+        bool "Enable WiFi STA + SNTP, write PCF85063"
+        default y
+        help
+            When SSID is non-empty: init netif, connect STA, run SNTP, on success write Asia/Shanghai wall time to RTC.
+            Password may be empty for open AP.
+
+    config WATCH_WIFI_STA_SSID
+        string "Wi-Fi SSID"
+        depends on WATCH_WIFI_STA_ENABLE
+        default ""
+        help
+            Leave empty to skip WiFi/SNTP at boot (no connect).
+
+    config WATCH_WIFI_STA_PASSWORD
+        string "Wi-Fi password"
+        depends on WATCH_WIFI_STA_ENABLE
+        default ""
+
+endmenu
